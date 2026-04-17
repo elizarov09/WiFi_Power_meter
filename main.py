@@ -1,8 +1,6 @@
 # main.py
-import time
 import logging
-import sqlite3
-import threading
+from logging.handlers import TimedRotatingFileHandler
 from utils import *
 import db_handler
 from device_monitor import DeviceMonitor
@@ -10,18 +8,24 @@ from telegram_bot import TelegramNotifier
 
 
 def setup_logging():
-    """Настройка логирования"""
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        filename='power_monitoring.log'
-    )
-    # Вывод логов также в консоль
-    console = logging.StreamHandler()
-    console.setLevel(logging.INFO)
+    """Настройка логирования с ежедневной ротацией и хранением 90 дней"""
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+    file_handler = TimedRotatingFileHandler(
+        'power_monitoring.log', when='midnight', backupCount=90, encoding='utf-8'
+    )
+    file_handler.setFormatter(formatter)
+
+    console = logging.StreamHandler()
     console.setFormatter(formatter)
-    logging.getLogger('').addHandler(console)
+
+    root = logging.getLogger()
+    root.setLevel(logging.INFO)
+    root.addHandler(file_handler)
+    root.addHandler(console)
+
+    for noisy in ('urllib3', 'requests', 'httpx', 'httpcore', 'telegram', 'apscheduler'):
+        logging.getLogger(noisy).setLevel(logging.WARNING)
 
 
 def main():
@@ -42,15 +46,10 @@ def main():
     try:
         # Инициализация telegram бота (теперь без передачи соединения с БД)
         notifier = TelegramNotifier()
+        notifier.device_id = device_id
+        notifier.start_notification_thread()
 
-        # Запуск потока отправки уведомлений
-        notification_thread = notifier.start_notification_thread()
-        logger.info("Запущен поток отправки уведомлений")
-
-        # Инициализация монитора устройства с передачей бота
         monitor = DeviceMonitor(conn, cursor, device_id, telegram_notifier=notifier)
-
-        # Запуск основного цикла мониторинга
         monitor.run()
 
     except KeyboardInterrupt:
