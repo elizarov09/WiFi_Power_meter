@@ -79,6 +79,7 @@ def get_tomorrow_forecast():
                 'temp': main.get('temp'),
                 'description': (weather.get('description') or '').strip(),
                 'wind_speed': wind.get('speed') or 0,
+                'wind_deg': wind.get('deg'),
                 'precip': precip,
             })
 
@@ -96,13 +97,16 @@ def get_tomorrow_forecast():
         dominant = Counter(descriptions).most_common(1)
         dominant_desc = dominant[0][0].capitalize() if dominant else 'нет данных'
 
+        max_wind_slot = max(slots, key=lambda s: s['wind_speed']) if slots else None
+
         return {
             'date': tomorrow,
             'temp_day': temp_day,
             'temp_night': temp_night,
             'description': dominant_desc,
             'precip_mm': sum(s['precip'] for s in slots),
-            'max_wind': max((s['wind_speed'] for s in slots), default=0),
+            'max_wind': max_wind_slot['wind_speed'] if max_wind_slot else 0,
+            'max_wind_dir': _wind_direction(max_wind_slot['wind_deg']) if max_wind_slot else 'нет данных',
         }
     except Exception as e:
         logger.error(f"Ошибка forecast: {e}")
@@ -142,6 +146,6 @@ def format_tomorrow(f):
         parts.append(f"🌡 день {f['temp_day']:+.1f}°C / ночь {f['temp_night']:+.1f}°C")
     if f.get('description'):
         parts.append(f['description'])
-    parts.append(f"💨 макс. ветер {f['max_wind']:.1f} м/с")
+    parts.append(f"💨 макс. ветер {f['max_wind']:.1f} м/с {f.get('max_wind_dir', '')}".rstrip())
     parts.append(f"☔ осадки {f['precip_mm']:.1f} мм")
     return "\n".join(parts)
