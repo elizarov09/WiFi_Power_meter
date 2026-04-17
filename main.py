@@ -48,6 +48,7 @@ def main():
         notifier = TelegramNotifier()
         notifier.device_id = device_id
         notifier.start_notification_thread()
+        notifier.start_weather_thread()
 
         monitor = DeviceMonitor(conn, cursor, device_id, telegram_notifier=notifier)
         monitor.run()

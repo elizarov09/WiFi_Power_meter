@@ -11,6 +11,8 @@ from utils import *
 from telegram.constants import ParseMode
 from telegram.ext import Application, CommandHandler
 
+import weather
+
 
 class TelegramNotifier:
     def __init__(self, token=BOT_TOKEN):
@@ -39,6 +41,7 @@ class TelegramNotifier:
                     app.add_handler(CommandHandler("help", self.command_help))
                     app.add_handler(CommandHandler("status", self.command_status))
                     app.add_handler(CommandHandler("month", self.command_month))
+                    app.add_handler(CommandHandler("weather", self.command_weather))
                     app.add_error_handler(self._error_handler)
                     self._app = app
 
@@ -70,6 +73,7 @@ class TelegramNotifier:
             "Команды:\n"
             "/status — текущее напряжение и мощность\n"
             "/month — отчёт за текущий месяц\n"
+            "/weather — текущая погода и прогноз на завтра\n"
             "/help — справка"
         )
 
@@ -86,7 +90,8 @@ class TelegramNotifier:
             "• отклонении напряжения более чем на 10%\n"
             "• восстановлении нормального напряжения\n\n"
             "/status — текущие показания\n"
-            "/month — отчёт за текущий месяц (потребление, обрывы, отклонения по фазам)"
+            "/month — отчёт за текущий месяц (потребление, обрывы, отклонения по фазам)\n"
+            "/weather — текущая погода + прогноз на завтра"
         )
 
     async def command_status(self, update, context):
@@ -338,6 +343,15 @@ class TelegramNotifier:
         message = header + period + energy_line + "\n".join(phase_lines)
         await update.message.reply_text(message, parse_mode=ParseMode.HTML)
 
+    # --- Погода по запросу ---
+
+    async def command_weather(self, update, context):
+        current = weather.get_current()
+        text = weather.format_current(current)
+        forecast = weather.get_tomorrow_forecast()
+        text += "\n\n" + weather.format_tomorrow(forecast)
+        await update.message.reply_text(text, parse_mode=ParseMode.HTML)
+
     # --- Уведомления о событиях ---
 
     def format_event_message(self, event):
@@ -431,5 +445,64 @@ class TelegramNotifier:
                 except Exception as e:
                     self.logger.error(f"Ошибка в потоке уведомлений: {e}")
                 time.sleep(check_interval)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    # --- Погода ---
+
+    @staticmethod
+    def _next_weather_slot(now=None):
+        """Ближайший будущий (час, минута) из WEATHER_SCHEDULE → datetime."""
+        if now is None:
+            now = datetime.datetime.now()
+        candidates = []
+        for h, m in WEATHER_SCHEDULE:
+            t = now.replace(hour=h, minute=m, second=0, microsecond=0)
+            if t <= now:
+                t += datetime.timedelta(days=1)
+            candidates.append(t)
+        return min(candidates)
+
+    async def _send_weather(self, with_forecast):
+        """Разослать погоду (и при необходимости прогноз) всем получателям."""
+        if self._app is None:
+            return
+        current = weather.get_current()
+        text = weather.format_current(current)
+        if with_forecast:
+            forecast = weather.get_tomorrow_forecast()
+            text += "\n\n" + weather.format_tomorrow(forecast)
+
+        bot = self._app.bot
+        for chat_id in [ADMIN_CHAT_ID] + USER_CHAT_IDS:
+            try:
+                await bot.send_message(chat_id=chat_id, text=text, parse_mode=ParseMode.HTML)
+            except Exception as e:
+                self.logger.error(f"Ошибка отправки погоды в {chat_id}: {e}")
+
+    def start_weather_thread(self):
+        """Спит до ближайшего слота из WEATHER_SCHEDULE и шлёт погоду."""
+        def worker():
+            while True:
+                try:
+                    fire_at = self._next_weather_slot()
+                    wait_sec = (fire_at - datetime.datetime.now()).total_seconds()
+                    if wait_sec > 0:
+                        time.sleep(wait_sec)
+
+                    with_forecast = (fire_at.hour == WEATHER_FORECAST_HOUR)
+                    if self._app is not None and self._loop is not None and self._loop.is_running():
+                        future = asyncio.run_coroutine_threadsafe(
+                            self._send_weather(with_forecast), self._loop
+                        )
+                        future.result(timeout=60)
+                    else:
+                        self.logger.warning("Погода: Application не готов, пропуск слота")
+
+                    # подстраховка от повторного срабатывания в ту же минуту
+                    time.sleep(61)
+                except Exception as e:
+                    self.logger.error(f"Ошибка в потоке погоды: {e}")
+                    time.sleep(60)
 
         threading.Thread(target=worker, daemon=True).start()

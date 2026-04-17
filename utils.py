@@ -18,6 +18,14 @@ BOT_TOKEN = '8057610382:AAFJ3eptrbp_7vd_LA-XcFL5s9MjEXqUBlA'
 ADMIN_CHAT_ID = 48829372
 USER_CHAT_IDS = [130236548, 303205612]
 
+# Погода (OpenWeatherMap)
+WEATHER_API_KEY = 'e3f0c9fcf634aa2276ae7ad3292eb3fd'
+WEATHER_LAT = 54.191667
+WEATHER_LON = 33.7225
+WEATHER_LOCATION = 'с. Жерелево, Калужская обл.'
+WEATHER_SCHEDULE = [(7, 0), (14, 0), (21, 0)]   # часы/минуты локального времени
+WEATHER_FORECAST_HOUR = 21                       # в этот час добавлять прогноз на завтра
+
 try:
     EMOJI = {
         'warning': emoji.emojize(':warning:'),
