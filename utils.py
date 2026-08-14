@@ -3,15 +3,15 @@ import emoji
 
 # Параметры электросети — ГОСТ 32144-2013 (РФ)
 VOLTAGE_NOMINAL = 220             # Номинальное напряжение (В)
-VOLTAGE_TOLERANCE_NORMAL = 0.05  # Нормально допустимое отклонение (±5%)
-VOLTAGE_TOLERANCE = 0.10         # Предельно допустимое отклонение (±10%)
+VOLTAGE_TOLERANCE_NORMAL = 0.10  # Нормально допустимое отклонение (±5%)
+VOLTAGE_TOLERANCE = 0.14         # Предельно допустимое отклонение (±10%)
 VOLTAGE_TOLERANCE_BETWEEN_PHASES = 0.02
 VOLTAGE_TOLERANCE_BETWEEN_PHASES_MAX = 0.04
 
 # Параметры устройства и мониторинга
 DEVICE_IP = '192.168.1.25'
 DB_NAME = 'power_monitoring.db'
-MEASUREMENT_INTERVAL = 60  # секунд
+MEASUREMENT_INTERVAL = 10  # секунд
 
 # Параметры Telegram бота
 BOT_TOKEN = '8057610382:AAFJ3eptrbp_7vd_LA-XcFL5s9MjEXqUBlA'

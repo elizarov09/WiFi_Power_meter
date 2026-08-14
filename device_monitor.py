@@ -23,6 +23,10 @@ class DeviceMonitor:
 
         self.logger = logging.getLogger('DeviceMonitor')
 
+        # Устройство недоступно (нет ответа по WiFi), и ИБП уже подтвердил, что это
+        # реальная пропажа сети (utility_fail), а не сбой WiFi/самого устройства
+        self.ups_outage_confirmed = False
+
     def get_device_data(self):
         """Получение данных с устройства через REST API"""
         try:
@@ -71,7 +75,8 @@ class DeviceMonitor:
             ('voltage3', 3, data['voltage3']),
         ]
 
-        for name, num, value in phases:
+        for name, num, raw_value in phases:
+            value = int(raw_value)  # ponytail: обрезаем до целого, чтобы десятые не порождали лишние события
             prev_state = self.phase_state[name]
 
             if value < 10:
@@ -104,16 +109,41 @@ class DeviceMonitor:
 
         return events
 
+    def check_ups_outage(self):
+        """Устройство недоступно по WiFi - спрашиваем ИБП, реальная ли это пропажа сети,
+        чтобы не путать обрыв электричества со сбоем WiFi/самого счётчика."""
+        from ups_probe import get_ups_status
+        from db_handler import save_event
+
+        ups = get_ups_status()
+        if not ups or ups.get('utility_fail') != '1':
+            return  # ИБП недоступен или сеть по его данным в норме - не наш случай
+
+        if self.ups_outage_confirmed:
+            return  # уже сообщили, не дублируем
+
+        self.ups_outage_confirmed = True
+        self.logger.warning("Устройство недоступно по WiFi, ИБП подтверждает пропажу сети")
+        save_event(
+            self.conn, self.cursor, self.device_id, 'power_outage',
+            json.dumps({'phase': 0, 'prev_state': 'normal', 'source': 'ups'}),
+        )
+
     def process_measurement(self):
         """Обработка одного цикла измерения"""
         data = self.get_device_data()
         if not data:
+            self.check_ups_outage()
             return None
 
         events = self.check_voltage_anomalies(data)
 
         from db_handler import save_measurement, save_event
         save_measurement(self.conn, self.cursor, self.device_id, data)
+
+        if self.ups_outage_confirmed:
+            self.ups_outage_confirmed = False
+            events.append(('power_restored', json.dumps({'phase': 0, 'prev_state': 'outage', 'source': 'ups'})))
 
         if events:
             timestamp_iso = datetime.datetime.strptime(

@@ -1,18 +1,22 @@
 # main.py
 import logging
+import os
 from logging.handlers import TimedRotatingFileHandler
 from utils import *
 import db_handler
 from device_monitor import DeviceMonitor
 from telegram_bot import TelegramNotifier
 
+LOG_DIR = 'logs'
+
 
 def setup_logging():
     """Настройка логирования с ежедневной ротацией и хранением 90 дней"""
+    os.makedirs(LOG_DIR, exist_ok=True)
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
     file_handler = TimedRotatingFileHandler(
-        'power_monitoring.log', when='midnight', backupCount=90, encoding='utf-8'
+        os.path.join(LOG_DIR, 'power_monitoring.log'), when='midnight', backupCount=90, encoding='utf-8'
     )
     file_handler.setFormatter(formatter)
 

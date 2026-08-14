@@ -106,8 +106,30 @@ class TelegramNotifier:
                 f"Мониторинг не работает?"
             )
 
-        message = self.format_status_message(self.last_data)
+        from ups_probe import get_ups_status
+        ups = await asyncio.to_thread(get_ups_status)
+
+        message = self.format_status_message(self.last_data) + self.format_ups_section(ups)
         await update.message.reply_text(message, parse_mode=ParseMode.HTML)
+
+    def format_ups_section(self, ups):
+        """Статус ИБП (Q1/Megatec). Отдаёт только те поля, в достоверности которых
+        мы убедились на практике - battery_voltage и temperature у этой прошивки похожи на мусор."""
+        if not ups:
+            return f"\n\n{EMOJI['warning']} <b>ИБП:</b> нет связи"
+
+        state = (
+            f"{EMOJI['cross']} <b>ОТ БАТАРЕИ (сеть пропала)</b>"
+            if ups.get('utility_fail') == '1'
+            else f"{EMOJI['check']} от сети"
+        )
+        load = ups.get('load_percent', '?')
+        voltage = ups.get('input_voltage', '?')
+        return (
+            f"\n\n<b>ИБП:</b> {state}\n"
+            f"Вход {int(float(voltage))} В, нагрузка {int(load)}%, "
+            f"{ups.get('frequency', '?')} Гц"
+        )
 
     def format_status_message(self, data):
         """Форматирование текущего статуса"""
@@ -124,15 +146,16 @@ class TelegramNotifier:
         total_power = data.get('total_power', 0)
 
         voltage_lines = []
-        for i, v in enumerate(voltages, 1):
+        for i, raw_v in enumerate(voltages, 1):
+            v = int(raw_v)
             if v < 10:
-                line = f"Фаза {i}: {EMOJI['cross']} {v:.1f} В — ПРОПАДАНИЕ"
+                line = f"Фаза {i}: {EMOJI['cross']} {v} В — ПРОПАДАНИЕ"
             elif v < voltage_min or v > voltage_max:
-                line = f"Фаза {i}: {EMOJI['cross']} {v:.1f} В (предел ±10%!)"
+                line = f"Фаза {i}: {EMOJI['cross']} {v} В (предел ±10%!)"
             elif v < voltage_min_normal or v > voltage_max_normal:
-                line = f"Фаза {i}: {EMOJI['warning']} {v:.1f} В (вне нормы ±5%)"
+                line = f"Фаза {i}: {EMOJI['warning']} {v} В (вне нормы ±5%)"
             else:
-                line = f"Фаза {i}: {EMOJI['check']} {v:.1f} В"
+                line = f"Фаза {i}: {EMOJI['check']} {v} В"
             voltage_lines.append(line)
 
         # Несимметрия фаз
@@ -363,36 +386,39 @@ class TelegramNotifier:
         v_min = details.get('min_threshold', VOLTAGE_NOMINAL * (1 - VOLTAGE_TOLERANCE))
         v_max = details.get('max_threshold', VOLTAGE_NOMINAL * (1 + VOLTAGE_TOLERANCE))
 
+        value = int(value)
+        v_min, v_max = int(v_min), int(v_max)
+
         if event_type == 'power_outage':
             return (
                 f"{EMOJI['cross']} <b>ПРОПАДАНИЕ НАПРЯЖЕНИЯ</b>\n"
-                f"Фаза {phase}: {value:.1f} В\n"
+                f"Фаза {phase}: {value} В\n"
                 f"Время: {timestamp}"
             )
         elif event_type == 'power_restored':
             return (
                 f"{EMOJI['check']} <b>Напряжение восстановлено</b>\n"
-                f"Фаза {phase}: {value:.1f} В\n"
+                f"Фаза {phase}: {value} В\n"
                 f"Время: {timestamp}"
             )
         elif event_type == 'voltage_deviation':
             direction = "низкое" if value < VOLTAGE_NOMINAL else "высокое"
             return (
                 f"{EMOJI['warning']} <b>Отклонение напряжения (&gt;10%)</b>\n"
-                f"Фаза {phase}: {value:.1f} В ({direction})\n"
-                f"Допустимо: {v_min:.0f}–{v_max:.0f} В\n"
+                f"Фаза {phase}: {value} В ({direction})\n"
+                f"Допустимо: {v_min}–{v_max} В\n"
                 f"Время: {timestamp}"
             )
         elif event_type == 'voltage_normal':
             return (
                 f"{EMOJI['check']} <b>Напряжение в норме</b>\n"
-                f"Фаза {phase}: {value:.1f} В\n"
+                f"Фаза {phase}: {value} В\n"
                 f"Время: {timestamp}"
             )
         else:
             return (
                 f"{EMOJI['warning']} Событие: {event_type}\n"
-                f"Фаза {phase}: {value:.1f} В\n"
+                f"Фаза {phase}: {value} В\n"
                 f"Время: {timestamp}"
             )
 
