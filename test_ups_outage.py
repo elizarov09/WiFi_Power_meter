@@ -55,15 +55,33 @@ def test_unreachable_but_mains_ok_is_not_reported():
 
 
 def test_decimal_excess_does_not_trigger_deviation():
-    """242.0 - верхний предел (+10%). Превышение только в десятых (242.9) не должно
-    считаться отклонением - обрезаем до целого перед сравнением с порогом."""
+    """250.8 - верхний предел входа в deviation (+14%). Превышение только в десятых
+    (250.9) не должно считаться отклонением - обрезаем до целого перед сравнением с порогом."""
     monitor = make_monitor()
-    data = {'voltage1': 242.9, 'voltage2': 220.0, 'voltage3': 220.0}
+    data = {'voltage1': 250.9, 'voltage2': 220.0, 'voltage3': 220.0}
     assert monitor.check_voltage_anomalies(data) == []
 
-    data['voltage1'] = 243.0
+    data['voltage1'] = 251.0
     events = monitor.check_voltage_anomalies(data)
     assert [e[0] for e in events] == ['voltage_deviation']
+
+
+def test_deviation_hysteresis():
+    """Вход в deviation - при выходе за 14% (250.8В), а возврат в normal - только
+    при возврате внутрь более узких 10% (198-242В), а не сразу как только вышли
+    за пределы 14%. Пограничное значение 250В (< 14%, но всё ещё > 10%) не должно
+    считаться восстановлением нормы."""
+    monitor = make_monitor()
+    data = {'voltage1': 255.0, 'voltage2': 220.0, 'voltage3': 220.0}
+    events = monitor.check_voltage_anomalies(data)
+    assert [e[0] for e in events] == ['voltage_deviation']
+
+    data['voltage1'] = 250.0  # ниже порога входа 14% (250.8), но выше 10% (242) - остаёмся в deviation
+    assert monitor.check_voltage_anomalies(data) == []
+
+    data['voltage1'] = 242.0  # внутри 10% - вот теперь норма
+    events = monitor.check_voltage_anomalies(data)
+    assert [e[0] for e in events] == ['voltage_normal']
 
 
 def test_format_ups_section():
@@ -78,5 +96,6 @@ if __name__ == '__main__':
     test_confirmed_outage_and_restore()
     test_unreachable_but_mains_ok_is_not_reported()
     test_decimal_excess_does_not_trigger_deviation()
+    test_deviation_hysteresis()
     test_format_ups_section()
     print('OK')

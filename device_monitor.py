@@ -64,10 +64,18 @@ class DeviceMonitor:
 
     def check_voltage_anomalies(self, data):
         """Проверка аномалий напряжения по каждой фазе.
-        Генерирует событие только при смене состояния фазы."""
+        Генерирует событие только при смене состояния фазы.
+
+        Гистерезис: в 'deviation' входим только при выходе за VOLTAGE_TOLERANCE (14%,
+        порог занижен нарочно, чтобы не спамить на частые кратковременные скачки),
+        а возвращаемся в 'normal' только когда напряжение снова внутри более узкого
+        VOLTAGE_TOLERANCE_NORMAL (10%) - иначе "восстановление" срабатывало от
+        колебания в 1В на границе диапазона."""
         events = []
         voltage_min = VOLTAGE_NOMINAL * (1 - VOLTAGE_TOLERANCE)
         voltage_max = VOLTAGE_NOMINAL * (1 + VOLTAGE_TOLERANCE)
+        voltage_min_normal = VOLTAGE_NOMINAL * (1 - VOLTAGE_TOLERANCE_NORMAL)
+        voltage_max_normal = VOLTAGE_NOMINAL * (1 + VOLTAGE_TOLERANCE_NORMAL)
 
         phases = [
             ('voltage1', 1, data['voltage1']),
@@ -81,6 +89,8 @@ class DeviceMonitor:
 
             if value < 10:
                 new_state = 'outage'
+            elif prev_state == 'deviation':
+                new_state = 'normal' if voltage_min_normal <= value <= voltage_max_normal else 'deviation'
             elif value < voltage_min or value > voltage_max:
                 new_state = 'deviation'
             else:

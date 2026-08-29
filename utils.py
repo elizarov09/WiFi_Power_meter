@@ -3,8 +3,8 @@ import emoji
 
 # Параметры электросети — ГОСТ 32144-2013 (РФ)
 VOLTAGE_NOMINAL = 220             # Номинальное напряжение (В)
-VOLTAGE_TOLERANCE_NORMAL = 0.10  # Нормально допустимое отклонение (±5%)
-VOLTAGE_TOLERANCE = 0.14         # Предельно допустимое отклонение (±10%)
+VOLTAGE_TOLERANCE_NORMAL = 0.10  # Порог возврата в 'normal' (гистерезис) и граница "в норме" в отчётах (±10%)
+VOLTAGE_TOLERANCE = 0.14         # Порог входа в 'deviation' - занижен относительно ГОСТ (±10%), чтобы не спамить
 VOLTAGE_TOLERANCE_BETWEEN_PHASES = 0.02
 VOLTAGE_TOLERANCE_BETWEEN_PHASES_MAX = 0.04
 
@@ -25,6 +25,10 @@ WEATHER_LON = 33.7225
 WEATHER_LOCATION = 'с. Жерелево, Калужская обл.'
 WEATHER_SCHEDULE = [(7, 0), (14, 0), (21, 0)]   # часы/минуты локального времени
 WEATHER_FORECAST_HOUR = 21                       # в этот час добавлять прогноз на завтра
+
+# Автопуш отчётов (день/неделя/месяц) - раз в сутки в это время
+REPORT_HOUR = 9
+REPORT_MINUTE = 0
 
 try:
     EMOJI = {
